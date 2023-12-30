@@ -22,11 +22,13 @@ const bootstrap = async () => {
 		}
 	};
 
-	const generateTrendsMessage = (newTrends) => {
-		let message = '';
+	const generateTrendsMessage = (newTrends, tokenPairSymbol) => {
+		let message = `Pooled: #${tokenPairSymbol}\n`;
 	
 		// Определяем изменения в позициях и новые токены
 		newTrends.forEach((t, index) => {
+			if (t.pooled !== tokenPairSymbol) return;
+
 			const previousPosition = previousTrends.findIndex(p => p.id === t.id) + 1;
 			if (previousPosition === 0) {
 				// Новый токен
@@ -54,16 +56,25 @@ const bootstrap = async () => {
 	const fetchTrends = async () => {
 		try {
 			const response = await axios.get('https://api.seer.coinhall.org/api/coinhall/trending/pools');
-			return response.data.pools.filter((pool) => ![pool.assets[0].symbol, pool.assets[1].symbol].includes('SEI')).map(pool => ({
-				id: pool.id,
-				symbol: ['INJ'].includes(pool.assets[0].symbol) ? `${pool.assets[1].symbol} / ${pool.assets[0].symbol}` : `${pool.assets[0].symbol} / ${pool.assets[1].symbol}`,
-			}));
+			return response.data.pools.map((pool) => {
+				const pooledToken = ['INJ', 'SEI'].includes(pool.assets[0].symbol) ? pool.assets[0].symbol : pool.assets[1].symbol;
+				const token = pool.assets[0].symbol === pooledToken ? pool.assets[1].symbol : pool.assets[0].symbol
+
+				return {
+					id: pool.id,
+					pooled: pooledToken,
+					symbol: `${token} / ${pooledToken}`
+				}
+			});
+			// return response.data.pools.filter((pool) => ![pool.assets[0].symbol, pool.assets[1].symbol].includes('SEI')).map(pool => ({
+			// 	id: pool.id,
+			// 	symbol: ['INJ'].includes(pool.assets[0].symbol) ? `${pool.assets[1].symbol} / ${pool.assets[0].symbol}` : `${pool.assets[0].symbol} / ${pool.assets[1].symbol}`,
+			// }));
 		} catch (error) {
 			console.error('Error fetching trends', error.message);
 			return [];
 		}
 	};
-
 
 	const escapeMarkdownV2 = (str) => {
 		const specialChars = ['_', '*', '~', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
@@ -80,7 +91,6 @@ const bootstrap = async () => {
 	receivers.forEach(async (receiver) => {
 		const trending = await axios.get('https://api.seer.coinhall.org/api/coinhall/trending/pools').then((res) => res.data.pools)
 		const message = `
-Bot Launched
 Actual List:
 
 ${trending.map((pool, poolIndex) => {
@@ -93,27 +103,31 @@ ${trending.map((pool, poolIndex) => {
 			.catch(_ => console.log(`Message not sended about launch to ${receiver}`))
 	});
 
+
+	let latestSeiMsg = '';
+	let latestInjMsg = ''
 	while (true) {
 		console.log(`[${new Date().toLocaleTimeString()}] Fetch trends...`);
 
         const newTrends = await fetchTrends();
-        const message = generateTrendsMessage(newTrends);
-		
-		if (newTrends.length !== 0) {
-			if (
-				message &&
-				JSON.stringify(newTrends) !== JSON.stringify(previousTrends)
-			) {
-				// console.log([
-				// 	newTrends,
-				// 	previousTrends,
-				// 	message
-				// ])
-				await notifySubscribers(message);
-			}
+        const messageInj = generateTrendsMessage(newTrends, 'INJ');
+		const messageSei = generateTrendsMessage(newTrends, 'SEI');
 
-			previousTrends = [ ...newTrends ];
+		if (
+			newTrends.length !== 0 &&
+			JSON.stringify(newTrends) !== JSON.stringify(previousTrends)
+		) {
+			if (latestInjMsg !== messageInj) {
+				notifySubscribers(messageInj);
+				latestInjMsg = messageInj;
+			}
+			if (latestSeiMsg !== messageSei) {
+				notifySubscribers(messageSei);
+				latestSeiMsg = messageSei;
+			}	
 		}
+
+		previousTrends = [ ...newTrends ];
         
         await new Promise(resolve => setTimeout(resolve, 5000)); // Пауза на 1 минуту
     }
