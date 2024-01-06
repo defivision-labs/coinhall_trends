@@ -1,6 +1,13 @@
 import axios from 'axios';
 import TelegramBot from 'node-telegram-bot-api';
 
+const bypassCorsHeaders = {
+	"Referer": "https://coinhall.org/",
+	"Pragma": "no-cache",
+	"Origin": "https://coinhall.org",
+	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
 const bootstrap = async () => {
 	const client = new TelegramBot('6282135801:AAElFeYk-a74zzTggDvjmPGFP39Ko7GfImQ');
 	const bot_metadata = await client.getMe();
@@ -55,7 +62,7 @@ const bootstrap = async () => {
 
 	const fetchTrends = async () => {
 		try {
-			const response = await axios.get('https://api.seer.coinhall.org/api/coinhall/trending/pools');
+			const response = await axios.get('https://api.seer.coinhall.org/api/coinhall/trending/pools', { headers: bypassCorsHeaders });
 			return response.data.pools.map((pool) => {
 				const pooledToken = ['INJ', 'SEI'].includes(pool.assets[0].symbol) ? pool.assets[0].symbol : pool.assets[1].symbol;
 				const token = pool.assets[0].symbol === pooledToken ? pool.assets[1].symbol : pool.assets[0].symbol
@@ -89,7 +96,7 @@ const bootstrap = async () => {
 	}
 
 	receivers.forEach(async (receiver) => {
-		const trending = await axios.get('https://api.seer.coinhall.org/api/coinhall/trending/pools').then((res) => res.data.pools)
+		const trending = await axios.get('https://api.seer.coinhall.org/api/coinhall/trending/pools', { headers: bypassCorsHeaders }).then((res) => res.data.pools)
 		const message = `
 Actual List:
 
